@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Criminal Record Face Match</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1F5; --paper:#FFFFFF; --ink:#15202B; --muted:#5A6879; --line:#D7DEE6; --tint:#EDF1F6;
+  --brand:#2F6FDE; --ok:#1C8A5A; --warn:#C77700; --danger:#C8323C; --view:#0C141C;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0); padding-bottom:env(safe-area-inset-bottom,0);
+  font-family:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E141B; --paper:#161E29; --ink:#E6ECF3; --muted:#93A2B5; --line:#28323F; --tint:#1B2531;
+  --brand:#6B9BFF; --ok:#4CC38A; --warn:#F0A93B; --danger:#FF6B74; --view:#05090D;}}
+:root[data-theme="dark"]{--bg:#0E141B;--paper:#161E29;--ink:#E6ECF3;--muted:#93A2B5;--line:#28323F;--tint:#1B2531;--brand:#6B9BFF;--ok:#4CC38A;--warn:#F0A93B;--danger:#FF6B74;--view:#05090D;}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0)}
+body{margin:0;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55}
+.wrap{max-width:1160px;margin:0 auto;padding:22px 18px 44px;display:grid;gap:22px;grid-template-columns:minmax(0,5fr) minmax(0,4fr);align-items:start}
+@media (max-width:880px){.wrap{grid-template-columns:1fr;padding:14px 12px 32px}}
+h1{font-size:1.5rem;font-weight:800;letter-spacing:-.01em;margin:0 0 3px}
+.sub{color:var(--muted);margin:0 0 14px;max-width:52ch}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px}
+.pad{padding:16px}
+
+/* Viewfinder */
+.finder{position:relative;aspect-ratio:4/3;background:var(--view);border-radius:14px 14px 0 0;overflow:hidden}
+.finder video,.finder canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.finder.mirror video,.finder.mirror canvas{transform:scaleX(-1)}
+.idle{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#C4CFDA;padding:22px}
+.idle p{margin:0 0 12px;max-width:34ch}
+.verdict{position:absolute;left:12px;right:12px;top:12px;border-radius:10px;padding:10px 14px;font-weight:700;
+  display:none;align-items:center;gap:10px;backdrop-filter:blur(4px)}
+.verdict.show{display:flex}
+.verdict.match{background:rgba(28,138,90,.92);color:#fff}
+.verdict.nomatch{background:rgba(200,50,60,.92);color:#fff}
+.verdict.searching{background:rgba(15,23,32,.7);color:#DCE4EC}
+.verdict .who{font-size:1.15rem}.verdict small{display:block;font-weight:500;opacity:.85;font-size:.78rem}
+.badge{position:absolute;left:12px;bottom:12px;background:rgba(15,23,32,.7);color:#DCE4EC;font-size:.78rem;padding:5px 10px;border-radius:20px}
+
+/* Controls */
+.controls{display:flex;flex-wrap:wrap;gap:10px}
+.field{display:flex;flex-direction:column;gap:4px;flex:1 1 180px}
+.field label{font-size:.8rem;color:var(--muted)}
+input[type=text]{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+button{font:inherit;font-weight:600;border:1px solid var(--line);border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--paper);color:var(--ink)}
+button.primary{background:var(--brand);color:#fff;border-color:transparent;font-weight:700}
+button.wide{flex:1 1 100%;padding:13px}
+button.alert{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--danger);color:#fff;border-color:transparent;font-weight:700}
+button.alert svg{width:18px;height:18px;flex:none}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,input[type=range]:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+.row{display:flex;gap:10px;flex:1 1 100%}.row button{flex:1}
+.msg{min-height:1.35em;margin:10px 0 0;font-size:.9rem;color:var(--muted)}
+.msg.err{color:var(--danger)}.msg.ok{color:var(--ok)}
+.slider{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:.85rem;color:var(--muted)}
+.slider input{flex:1}
+
+/* Records */
+.rec-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.rec-top h2{margin:0;font-size:1.05rem}.rec-top span{color:var(--muted);font-size:.85rem}
+.rec-list{max-height:60vh;overflow:auto}
+.person{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.person:last-child{border-bottom:0}
+.person img{width:46px;height:46px;border-radius:8px;object-fit:cover;background:var(--tint)}
+.person b{display:block}.person small{color:var(--muted)}
+.person .sp{flex:1}
+.person button{padding:6px 10px;font-size:.82rem}
+.person button.add{color:var(--brand)}.person button.del{color:var(--danger)}
+.empty{padding:34px 18px;text-align:center;color:var(--muted)}
+.io{display:flex;gap:10px;padding:12px 16px;border-top:1px solid var(--line)}
+.io button{flex:1;font-size:.85rem}
+.setup{background:var(--tint);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:.85rem;color:var(--muted);margin-bottom:14px}
+.setup code{background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.85em}
+.pill{display:inline-block;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--tint);color:var(--muted);border:1px solid var(--line)}
+.pill.on{background:var(--ok);color:#fff;border-color:transparent}
+.wban{position:absolute;left:12px;right:12px;bottom:48px;border-radius:10px;padding:10px 14px;font-weight:800;display:none;background:rgba(200,50,60,.95);color:#fff;backdrop-filter:blur(4px)}
+.wban.show{display:flex;align-items:center;gap:10px}
+.wban small{display:block;font-weight:500;opacity:.9;font-size:.78rem}
+select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <!-- LEFT: camera -->
+  <section>
+    <h1>Face Match <span class="pill" id="modelPill">models: loading…</span></h1>
+    <p class="sub">Upload your criminal record JSON, then point the camera at a person. The page tells you whether the person is present in the record (match found) or not.</p>
+
+    <div class="card">
+      <div class="finder mirror" id="finder">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="verdict searching" id="verdict"><span class="who" id="vWho">—</span></div>
+        <div class="badge" id="badge" style="display:none"></div>
+        <div class="wban" id="wBanner" role="alert"></div>
+        <div class="idle" id="idle">
+          <div>
+            <p id="idleText">Loading face models… this happens once and needs an internet connection.</p>
+            <button class="primary" id="startBtn" disabled>Start camera</button>
+          </div>
+        </div>
+      </div>
+      <div class="pad">
+        <div class="controls">
+          <div class="field">
+            <label for="nameIn">Name to enroll</label>
+            <input type="text" id="nameIn" autocomplete="off" placeholder="e.g. Harii">
+          </div>
+          <button class="primary" id="enrollBtn" disabled>Capture &amp; enroll</button>
+          <button class="primary wide" id="verifyBtn" disabled>Start live check</button>
+          <div class="row">
+            <button id="flipBtn" disabled>Switch camera</button>
+            <button id="stopBtn" disabled>Stop camera</button>
+          </div>
+          <button class="alert wide" id="alertBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            Alert control room
+          </button>
+          <button class="wide scrape" id="scrapeBtn" type="button">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg>Web scrape person details
+          </button>
+        </div>
+        <div class="slider">
+          <span>Strictness</span>
+          <input type="range" id="thresh" min="0.40" max="0.70" step="0.01" value="0.55">
+          <span id="threshVal">0.55</span>
+        </div>
+        <p class="msg" id="msg" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: records -->
+  <section>
+    <div class="setup">
+      <b>Run this on localhost.</b> Browsers only allow the camera on <code>https</code> or <code>localhost</code> pages. In this file's folder run <code>python -m http.server 8000</code>, then open <code>http://localhost:8000/face-match.html</code>.
+    </div>
+    <div class="card" style="margin-bottom:22px">
+      <div class="rec-top"><div><h2>Weapon detection <span class="pill" id="wPill">model: none</span></h2><span>YOLOv8 / YOLO11 ONNX model, runs in your browser</span></div></div>
+      <div class="pad">
+        <div class="controls">
+          <button class="primary" id="wModelBtn" type="button">Load YOLO model (.onnx)</button>
+          <div class="field">
+            <label for="wClasses">Class names (comma-separated, in model order)</label>
+            <input type="text" id="wClasses" autocomplete="off" placeholder="e.g. gun, knife">
+          </div>
+          <div class="field" style="flex:0 0 110px">
+            <label for="wSize">Input size</label>
+            <select id="wSize"><option>640</option><option>480</option><option>416</option><option>320</option></select>
+          </div>
+          <button class="primary wide" id="wToggle" type="button" disabled>Start weapon detection</button>
+        </div>
+        <input type="file" id="wModelFile" accept=".onnx" hidden>
+        <div class="slider"><span>Confidence</span><input type="range" id="wConf" min="0.20" max="0.85" step="0.01" value="0.45"><span id="wConfVal">0.45</span></div>
+        <p class="msg" id="wMsg" role="status" aria-live="polite">Load your trained weapon model, start the camera, then start detection. It runs alongside the face check.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="rec-top"><div><h2>Criminal records</h2><span id="recCount">0 people</span></div>
+        <button id="clearBtn">Clear all</button></div>
+      <div class="rec-list" id="recList"></div>
+      <div class="empty" id="recEmpty">No records yet. Click <b>Upload record JSON</b> to load your criminal record file (<code>[{"id","name","img"}]</code>). You can also enroll a person from the camera.</div>
+      <div class="io">
+        <button id="exportBtn">Export records (.json)</button>
+        <button class="primary" id="importBtn">Upload record JSON</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <div class="rec-top"><div><h2>Bulk import from CSV</h2><span>one person per photo</span></div>
+        <button id="sampleBtn">Sample CSV</button></div>
+      <div class="pad">
+        <p style="margin:0 0 12px;color:var(--muted)">
+          CSV columns <code style="background:var(--tint);border:1px solid var(--line);border-radius:5px;padding:1px 6px">name,image</code>.
+          The <b>image</b> is a photo filename you also select, or an http(s) URL. Repeat a name to add more photos of the same person.</p>
+        <div class="controls">
+          <button class="primary" id="csvBtn">1 · Choose CSV file</button>
+          <button id="imgBtn" disabled>2 · Choose photo files</button>
+        </div>
+        <input type="file" id="csvFile" accept=".csv,text/csv" hidden>
+        <input type="file" id="imgFiles" accept="image/*" multiple hidden>
+        <p class="msg" id="csvMsg" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/ort.min.js"></script>
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const video=$('video'), overlay=$('overlay'), finder=$('finder'), idle=$('idle'), msg=$('msg');
+  const startBtn=$('startBtn'), stopBtn=$('stopBtn'), flipBtn=$('flipBtn');
+  const enrollBtn=$('enrollBtn'), verifyBtn=$('verifyBtn'), nameIn=$('nameIn');
+  const recList=$('recList'), recEmpty=$('recEmpty'), recCount=$('recCount');
+  const verdict=$('verdict'), vWho=$('vWho'), badge=$('badge'), modelPill=$('modelPill');
+  const threshEl=$('thresh'), threshVal=$('threshVal');
+  const MODEL_URL='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model';
+  const KEY='face-match-records';
+
+  let stream=null, facing='user', ready=false, verifying=false, rafId=null, busy=false;
+  let people=load();               // [{id,name,samples:[{photo,desc:[128]}]}]
+  let threshold=parseFloat(threshEl.value);
+
+  function say(t,k){ msg.textContent=t; msg.className='msg'+(k?' '+k:''); }
+  const opts=()=> new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5});
+
+  // ---- load models ----
+  (async()=>{
+    if(typeof faceapi==='undefined'){ modelPill.textContent='models: failed'; say('The face library did not load. Check your internet connection and reload.',true); return; }
+    try{
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
+      ready=true; modelPill.textContent='models: ready'; modelPill.classList.add('on');
+      startBtn.disabled=false; $('idleText').textContent='Models ready. Start the camera to begin.';
+      say('Models loaded. Start the camera.','ok');
+    }catch(e){ modelPill.textContent='models: failed';
+      say('Could not download the face models. This page needs internet the first time, and must run on http://localhost or https.',true); }
+  })();
+
+  // ---- camera ----
+  async function startCamera(){
+    if(!navigator.mediaDevices?.getUserMedia){ say('This browser exposes no camera API.',true); return; }
+    stopCamera(true);
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:960}},audio:false});
+      video.srcObject=stream; await video.play();
+      idle.style.display='none'; finder.classList.toggle('mirror',facing==='user');
+      sizeOverlay();
+      enrollBtn.disabled=!ready; verifyBtn.disabled=!ready; stopBtn.disabled=false; flipBtn.disabled=false; syncW();
+      say('Camera on. Enroll a face, or start live verify.');
+    }catch(e){
+      const n=e?.name;
+      if(n==='NotAllowedError') say('Camera permission was blocked. Allow camera for this page and start again. (Blocked silently? You are probably not on localhost/https.)',true);
+      else if(n==='NotFoundError') say('No camera found.',true);
+      else say('The camera could not start.',true);
+    }
+  }
+  function stopCamera(silent){
+    stopVerify();
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    video.srcObject=null; idle.style.display=''; clearOverlay(); stopWeapons(true);
+    enrollBtn.disabled=true; verifyBtn.disabled=true; stopBtn.disabled=true; flipBtn.disabled=true;
+    if(!silent) say('Camera stopped.');
+  }
+  function sizeOverlay(){ overlay.width=video.videoWidth||640; overlay.height=video.videoHeight||480; }
+  function clearOverlay(){ const c=overlay.getContext('2d'); c&&c.clearRect(0,0,overlay.width,overlay.height); }
+  startBtn.onclick=startCamera; stopBtn.onclick=()=>stopCamera(false);
+  flipBtn.onclick=()=>{ facing=facing==='user'?'environment':'user'; startCamera(); };
+
+  // ---- helpers ----
+  async function detectOne(){ // returns full descriptor result or null
+    if(!ready||!stream) return null;
+    return await faceapi.detectSingleFace(video,opts()).withFaceLandmarks().withFaceDescriptor();
+  }
+  function thumb(box){
+    const c=document.createElement('canvas'), s=112; c.width=s;c.height=s;
+    const ctx=c.getContext('2d');
+    const m=0.35, x=Math.max(0,box.x-box.width*m), y=Math.max(0,box.y-box.height*m);
+    const w=Math.min(video.videoWidth-x,box.width*(1+2*m)), h=Math.min(video.videoHeight-y,box.height*(1+2*m));
+    if(facing==='user'){ ctx.translate(s,0); ctx.scale(-1,1); }
+    ctx.drawImage(video,x,y,w,h,0,0,s,s);
+    return c.toDataURL('image/jpeg',0.8);
+  }
+  function addSample(name,desc,photo,refId){ // returns true if a new person was created
+    let p=people.find(x=>x.name.toLowerCase()===name.toLowerCase());
+    if(p){ p.samples.push({photo,desc}); return false; }
+    people.push({id:'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),refId:refId||null,name,samples:[{photo,desc}]});
+    return true;
+  }
+  function thumbImg(img){ // center-square thumbnail from a loaded <img>
+    const c=document.createElement('canvas'), s=112; c.width=s;c.height=s;
+    const ctx=c.getContext('2d'), side=Math.min(img.naturalWidth,img.naturalHeight);
+    ctx.drawImage(img,(img.naturalWidth-side)/2,(img.naturalHeight-side)/2,side,side,0,0,s,s);
+    return c.toDataURL('image/jpeg',0.8);
+  }
+  function bestMatch(desc){
+    let best={name:null,dist:Infinity};
+    for(const p of people) for(const s of p.samples){
+      const d=faceapi.euclideanDistance(desc,s.desc);
+      if(d<best.dist) best={name:p.name,dist:d,id:p.id,ref:p.refId};
+    }
+    return best;
+  }
+
+  // ---- enroll ----
+  enrollBtn.onclick=async()=>{
+    const name=nameIn.value.trim();
+    if(!name){ say('Type a name before enrolling.',true); nameIn.focus(); return; }
+    enrollBtn.disabled=true; say('Capturing…');
+    const res=await detectOne();
+    if(!res){ say('No clear face found. Face the camera in good light and try again.',true); enrollBtn.disabled=false; return; }
+    const desc=Array.from(res.descriptor), photo=thumb(res.detection.box);
+    let p=people.find(x=>x.name.toLowerCase()===name.toLowerCase());
+    if(p){ p.samples.push({photo,desc}); say('Added another capture for '+name+' ('+p.samples.length+' total).','ok'); }
+    else { people.push({id:'u'+Date.now().toString(36),name,samples:[{photo,desc}]}); say('Enrolled '+name+'.','ok'); nameIn.value=''; }
+    save(); render();
+    enrollBtn.disabled=false;
+  };
+
+  // ---- verify loop ----
+  verifyBtn.onclick=()=> verifying?stopVerify():startVerify();
+  function startVerify(){
+    if(!people.length){ say('Upload the criminal record JSON (or enroll someone) before starting the check.',true); return; }
+    verifying=true; verifyBtn.textContent='Stop live check'; verifyBtn.classList.remove('primary');
+    badge.style.display=''; say('Verifying live…');
+    ensureLoop();
+  }
+  function stopVerify(){
+    verifying=false;
+    verifyBtn.textContent='Start live check'; verifyBtn.classList.add('primary');
+    verdict.className='verdict searching show'; vWho.innerHTML='Idle'; badge.style.display='none'; clearOverlay();
+  }
+  let looping=false;
+  function ensureLoop(){ if(looping||!stream) return; looping=true; loop(); }
+  async function loop(){
+    if(!(verifying||weaponOn)||!stream){ looping=false; rafId=null; return; }
+    if(!busy){
+      busy=true;
+      try{
+        const res=verifying?await detectOne().catch(()=>null):null;
+        const wp=weaponOn?await detectWeapons().catch(()=>[]):[];
+        clearOverlay();
+        if(verifying) draw(res);
+        if(weaponOn) drawWeapons(wp);
+      }finally{ busy=false; }
+    }
+    rafId=requestAnimationFrame(loop);
+  }
+  function draw(res){
+    const ctx=overlay.getContext('2d');
+    verdict.classList.add('show');
+    if(!res){ verdict.className='verdict searching show'; vWho.innerHTML='Searching for a face…'; badge.textContent='no face'; return; }
+    const m=bestMatch(res.descriptor);
+    const isMatch=m.name && m.dist<=threshold;
+    const conf=Math.max(0,Math.round((1-m.dist)*100));
+    // box (canvas is mirrored via CSS, so draw in raw coords)
+    const b=res.detection.box;
+    ctx.lineWidth=Math.max(3,overlay.width/220);
+    ctx.strokeStyle=isMatch?'#1C8A5A':'#C8323C';
+    ctx.strokeRect(b.x,b.y,b.width,b.height);
+    if(isMatch){
+      verdict.className='verdict match show';
+      vWho.innerHTML='MATCH FOUND: '+m.name+' <small>present in criminal record'+(m.ref?' · ID '+m.ref:'')+' · distance '+m.dist.toFixed(2)+' · ~'+conf+'% similar</small>';
+    }else{
+      verdict.className='verdict nomatch show';
+      vWho.innerHTML='NOT FOUND <small>not present in criminal record'+(m.name?' · closest: '+m.name+' · distance '+m.dist.toFixed(2):' · no records loaded')+'</small>';
+    }
+    badge.textContent='threshold '+threshold.toFixed(2);
+  }
+
+  threshEl.oninput=()=>{ threshold=parseFloat(threshEl.value); threshVal.textContent=threshold.toFixed(2); };
+
+  // ---- records UI ----
+  function render(){
+    recList.innerHTML='';
+    people.forEach(p=>{
+      const row=document.createElement('div'); row.className='person';
+      const img=document.createElement('img'); img.src=p.samples[0]?.photo||''; img.alt=p.name;
+      const info=document.createElement('div');
+      info.innerHTML='<b></b><small>'+p.samples.length+' capture'+(p.samples.length>1?'s':'')+'</small>';
+      info.querySelector('b').textContent=p.name;
+      const sp=document.createElement('div'); sp.className='sp';
+      const add=document.createElement('button'); add.className='add'; add.textContent='+ add capture';
+      add.onclick=()=>{ nameIn.value=p.name; say('Face the camera and press “Capture & enroll” to add another capture for '+p.name+'.'); enrollBtn.focus(); };
+      const del=document.createElement('button'); del.className='del'; del.textContent='Delete';
+      del.onclick=()=>{ if(confirm('Delete '+p.name+'?')){ people=people.filter(x=>x.id!==p.id); save(); render(); } };
+      row.append(img,info,sp,add,del); recList.appendChild(row);
+    });
+    recEmpty.style.display=people.length?'none':'';
+    recCount.textContent=people.length+(people.length===1?' person':' people');
+  }
+  $('clearBtn').onclick=()=>{ if(people.length&&confirm('Delete all records?')){ people=[]; save(); render(); say('All records cleared.'); } };
+
+  // ---- persistence ----
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||[]; }catch(e){ return []; } }
+  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(people)); }catch(e){ say('Could not save to this browser (storage full?).',true); } }
+
+  $('exportBtn').onclick=()=>{
+    const blob=new Blob([JSON.stringify(people,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='face-records-'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),800);
+    say('Records exported.','ok');
+  };
+  $('importBtn').onclick=()=>$('importFile').click();
+  $('importFile').onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ try{
+      const data=JSON.parse(r.result);
+      if(!Array.isArray(data)) throw 0;
+      const native=data.filter(p=>p&&p.name&&p.samples);
+      const ds=data.filter(p=>p&&p.name&&(p.img||p.image));
+      if(!native.length&&!ds.length) throw 0;
+      if(native.length){
+        let added=0;
+        native.forEach(p=>{ if(!people.find(x=>x.name.toLowerCase()===p.name.toLowerCase())){ people.push(p); added++; } });
+        save(); render(); say('Imported '+added+' new record'+(added===1?'':'s')+'.','ok');
+      }
+      if(ds.length){ // criminal record dataset: [{id,name,img}] — img = data URI, http(s) URL, or a filename
+        csvRows=ds.map(p=>({name:String(p.name).trim(),image:String(p.img||p.image).trim(),id:p.id?String(p.id):null}));
+        const needFiles=csvRows.filter(x=>!isUrl(x.image)).length;
+        mirror=true;
+        if(!ready){ cmsg('Wait for the face models to finish loading, then upload again.',true); csvRows=[]; mirror=false; return; }
+        if(needFiles===0){ cmsg('Loaded '+csvRows.length+' records. Reading faces…'); processRows({}); }
+        else{ imgBtn.disabled=false; cmsg('Loaded '+csvRows.length+' records. Now click “2 · Choose photo files” (lower card) and select the '+needFiles+' image files from the images folder.'); }
+      }
+    }catch(_){ say('That file is not a valid record JSON. Expected [{"id","name","img"}].',true); } };
+    r.readAsText(f); e.target.value='';
+  };
+
+  // ---- CSV bulk import ----
+  const csvBtn=$('csvBtn'), imgBtn=$('imgBtn'), csvFile=$('csvFile'), imgFiles=$('imgFiles'), csvMsg=$('csvMsg');
+  let csvRows=[]; // [{name,image}]
+  let mirror=false;
+  function cmsg(t,k){ csvMsg.textContent=t; csvMsg.className='msg'+(k?' '+k:''); if(mirror) say(t,k); }
+
+  function parseCSV(text){
+    text=text.replace(/\r\n?/g,'\n'); const rows=[]; let f='',row=[],q=false;
+    for(let i=0;i<text.length;i++){ const c=text[i];
+      if(q){ if(c==='"'){ if(text[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+      else if(c==='"') q=true;
+      else if(c===','){ row.push(f); f=''; }
+      else if(c==='\n'){ row.push(f); rows.push(row); row=[]; f=''; }
+      else f+=c;
+    }
+    if(f.length||row.length){ row.push(f); rows.push(row); }
+    return rows.filter(r=>r.some(x=>x.trim()!==''));
+  }
+  function rowsToRecords(rows){
+    if(!rows.length) return [];
+    let start=0,nameIdx=0,imgIdx=1;
+    const head=rows[0].map(h=>h.trim().toLowerCase());
+    if(head.includes('name')){
+      start=1; nameIdx=head.indexOf('name');
+      const found=['image','photo','file','filename','url','image_url'].map(k=>head.indexOf(k)).filter(x=>x>=0);
+      imgIdx = found.length?found[0]:(nameIdx===0?1:0);
+    }
+    const out=[];
+    for(let r=start;r<rows.length;r++){
+      const name=(rows[r][nameIdx]||'').trim(), image=(rows[r][imgIdx]||'').trim();
+      if(name&&image) out.push({name,image});
+    }
+    return out;
+  }
+  const isUrl=s=>/^(https?:\/\/|data:image\/)/i.test(s);
+  const base=s=>s.split(/[\\/]/).pop().toLowerCase();
+
+  csvBtn.onclick=()=>csvFile.click();
+  csvFile.onchange=e=>{
+    const f=e.target.files[0]; e.target.value=''; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      try{
+        csvRows=rowsToRecords(parseCSV(r.result));
+        if(!csvRows.length){ cmsg('No usable rows found. Expected columns: name,image',true); imgBtn.disabled=true; return; }
+        const urls=csvRows.filter(x=>isUrl(x.image)).length, files=csvRows.length-urls;
+        if(files===0){ cmsg('Loaded '+csvRows.length+' rows (all URLs). Processing…'); processRows({}); }
+        else { imgBtn.disabled=false; cmsg('Loaded '+csvRows.length+' rows'+(urls?' ('+urls+' URLs, '+files+' filenames)':'')+'. Now choose the '+files+' photo file(s).'); }
+      }catch(_){ cmsg('Could not read that CSV.',true); }
+    };
+    r.readAsText(f);
+  };
+  imgBtn.onclick=()=>imgFiles.click();
+  imgFiles.onchange=e=>{
+    const map={}; [...e.target.files].forEach(f=>map[f.name.toLowerCase()]=f); e.target.value='';
+    processRows(map);
+  };
+
+  function loadImg(src,cross){
+    return new Promise((res,rej)=>{ const im=new Image(); if(cross) im.crossOrigin='anonymous';
+      im.onload=()=>res(im); im.onerror=()=>rej(new Error('load')); im.src=src; });
+  }
+  async function processRows(fileMap){
+    if(!ready){ cmsg('Wait for the face models to finish loading, then try again.',true); return; }
+    if(!csvRows.length) return;
+    csvBtn.disabled=true; imgBtn.disabled=true;
+    let ok=0,noface=0,missing=0,failed=0,dup=0;
+    for(let i=0;i<csvRows.length;i++){
+      const {name,image,id}=csvRows[i];
+      if(id&&people.some(x=>x.refId===id&&x.name.toLowerCase()===name.toLowerCase())){ dup++; continue; }
+      cmsg('Processing '+(i+1)+' / '+csvRows.length+' — '+name+'…');
+      let src=null,cross=false,objUrl=null;
+      if(isUrl(image)){ src=image; cross=true; }
+      else { const f=fileMap[base(image)]; if(f){ objUrl=URL.createObjectURL(f); src=objUrl; } }
+      if(!src){ missing++; continue; }
+      try{
+        const img=await loadImg(src,cross);
+        const res=await faceapi.detectSingleFace(img,opts()).withFaceLandmarks().withFaceDescriptor();
+        if(!res){ noface++; }
+        else { addSample(name,Array.from(res.descriptor),thumbImg(img),id); ok++; }
+      }catch(_){ failed++; }
+      finally{ if(objUrl) URL.revokeObjectURL(objUrl); }
+    }
+    save(); render();
+    const parts=[ok+' record'+(ok===1?'':'s')+' loaded'];
+    if(dup) parts.push(dup+' already in records');
+    if(noface) parts.push(noface+' had no detectable face');
+    if(missing) parts.push(missing+' photo(s) not found');
+    if(failed) parts.push(failed+' failed to load');
+    cmsg(parts.join(' · '), ok?'ok':'err');
+    csvRows=[]; csvBtn.disabled=false; mirror=false;
+  }
+
+  $('sampleBtn').onclick=()=>{
+    const csv='name,image\nHarii,harii.jpg\nHarii,harii_side.jpg\nNavina,navina.jpg\nGokul,gokul.jpg\n';
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+    a.download='sample-face-records.csv'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),800);
+  };
+
+  // ---- weapon detection (YOLOv8 / YOLO11 ONNX, in-browser) ----
+  const ORT_BASE='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/';
+  const wModelBtn=$('wModelBtn'), wModelFile=$('wModelFile'), wToggle=$('wToggle'), wMsg=$('wMsg'), wPill=$('wPill');
+  const wClasses=$('wClasses'), wSize=$('wSize'), wConf=$('wConf'), wConfVal=$('wConfVal'), wBanner=$('wBanner');
+  let weaponSession=null, weaponOn=false;
+  const wcan=document.createElement('canvas'), wctx=wcan.getContext('2d',{willReadFrequently:true});
+
+  function wsay(t,k){ wMsg.textContent=t; wMsg.className='msg'+(k?' '+k:''); }
+  function syncW(){ wToggle.disabled=!(weaponSession&&stream); }
+  function wName(i){ const n=wClasses.value.split(',').map(x=>x.trim()).filter(Boolean); return n[i]||('class '+i); }
+  wConf.oninput=()=>{ wConfVal.textContent=parseFloat(wConf.value).toFixed(2); };
+
+  wModelBtn.onclick=()=>wModelFile.click();
+  wModelFile.onchange=async e=>{
+    const f=e.target.files[0]; e.target.value=''; if(!f) return;
+    if(typeof ort==='undefined'){ wsay('The ONNX runtime did not load. Check your internet connection and reload.',true); return; }
+    wModelBtn.disabled=true; wsay('Loading '+f.name+'…');
+    try{
+      ort.env.wasm.wasmPaths=ORT_BASE; ort.env.wasm.numThreads=1;
+      const buf=await f.arrayBuffer();
+      weaponSession=await ort.InferenceSession.create(new Uint8Array(buf),{executionProviders:['wasm']});
+      wPill.textContent='model: ready'; wPill.classList.add('on');
+      wsay('Loaded '+f.name+'. '+(stream?'Press Start weapon detection.':'Start the camera, then press Start weapon detection.'),'ok');
+    }catch(err){
+      weaponSession=null; wPill.textContent='model: failed'; wPill.classList.remove('on');
+      wsay('Could not load that model. Export it from YOLOv8/YOLO11 with format=onnx and try again.',true);
+    }
+    wModelBtn.disabled=false; syncW();
+  };
+
+  wToggle.onclick=()=> weaponOn?stopWeapons():startWeapons();
+  function startWeapons(){
+    if(!weaponSession||!stream) return;
+    weaponOn=true; wToggle.textContent='Stop weapon detection'; wToggle.classList.remove('primary');
+    wsay('Scanning for weapons…'); ensureLoop();
+  }
+  function stopWeapons(silent){
+    weaponOn=false; wBanner.classList.remove('show');
+    wToggle.textContent='Start weapon detection'; wToggle.classList.add('primary');
+    if(!verifying) clearOverlay();
+    syncW(); if(!silent) wsay('Weapon detection stopped.');
+  }
+
+  async function detectWeapons(){
+    if(!weaponSession||!stream||!video.videoWidth) return [];
+    const S=parseInt(wSize.value,10)||640, conf=parseFloat(wConf.value);
+    const vw=video.videoWidth, vh=video.videoHeight;
+    if(wcan.width!==S){ wcan.width=S; wcan.height=S; }
+    const sc=Math.min(S/vw,S/vh), nw=Math.round(vw*sc), nh=Math.round(vh*sc);
+    const dx=Math.floor((S-nw)/2), dy=Math.floor((S-nh)/2);
+    wctx.fillStyle='#727272'; wctx.fillRect(0,0,S,S);
+    wctx.drawImage(video,0,0,vw,vh,dx,dy,nw,nh);
+    const px=wctx.getImageData(0,0,S,S).data, n=S*S, f=new Float32Array(3*n);
+    for(let i=0;i<n;i++){ f[i]=px[i*4]/255; f[n+i]=px[i*4+1]/255; f[2*n+i]=px[i*4+2]/255; }
+    const out=await weaponSession.run({[weaponSession.inputNames[0]]:new ort.Tensor('float32',f,[1,3,S,S])});
+    const o=out[weaponSession.outputNames[0]], dims=o.dims, data=o.data;
+    if(dims.length!==3) return [];
+    let N,C,at;
+    if(dims[1]<dims[2]){ C=dims[1]; N=dims[2]; at=(c,i)=>data[c*N+i]; }   // [1, 4+nc, N]
+    else { N=dims[1]; C=dims[2]; at=(c,i)=>data[i*C+c]; }                  // [1, N, 4+nc]
+    const nc=C-4, cand=[];
+    for(let i=0;i<N;i++){
+      let bs=0,bc=-1;
+      for(let c=0;c<nc;c++){ const v=at(4+c,i); if(v>bs){ bs=v; bc=c; } }
+      if(bc<0||bs<conf) continue;
+      const cx=at(0,i), cy=at(1,i), w=at(2,i), h=at(3,i);
+      const x1=Math.max(0,(cx-w/2-dx)/sc), y1=Math.max(0,(cy-h/2-dy)/sc);
+      const x2=Math.min(vw,(cx+w/2-dx)/sc), y2=Math.min(vh,(cy+h/2-dy)/sc);
+      if(x2<=x1||y2<=y1) continue;
+      cand.push({x:x1,y:y1,w:x2-x1,h:y2-y1,cls:bc,score:bs});
+    }
+    return nms(cand,0.45);
+  }
+  function nms(list,iouT){
+    list.sort((a,b)=>b.score-a.score);
+    const keep=[];
+    for(const d of list){
+      let ok=true;
+      for(const k of keep){
+        if(k.cls!==d.cls) continue;
+        const ix=Math.max(0,Math.min(k.x+k.w,d.x+d.w)-Math.max(k.x,d.x));
+        const iy=Math.max(0,Math.min(k.y+k.h,d.y+d.h)-Math.max(k.y,d.y));
+        const inter=ix*iy, iou=inter/(k.w*k.h+d.w*d.h-inter);
+        if(iou>iouT){ ok=false; break; }
+      }
+      if(ok) keep.push(d);
+    }
+    return keep;
+  }
+  function drawWeapons(list){
+    const ctx=overlay.getContext('2d'), mir=(facing==='user');
+    const fs=Math.max(14,Math.round(overlay.width/38));
+    ctx.lineWidth=Math.max(3,overlay.width/200);
+    list.forEach(d=>{
+      ctx.strokeStyle='#FF3B30'; ctx.strokeRect(d.x,d.y,d.w,d.h);
+      const label=wName(d.cls)+' '+Math.round(d.score*100)+'%';
+      ctx.font='700 '+fs+'px Figtree,system-ui,sans-serif';
+      const tw=ctx.measureText(label).width+12, th=fs+8, ly=Math.max(0,d.y-th);
+      ctx.save();
+      if(mir){ ctx.translate(d.x+d.w,ly); ctx.scale(-1,1); } else ctx.translate(d.x,ly); // keep text readable under the mirrored overlay
+      ctx.fillStyle='#FF3B30'; ctx.fillRect(0,0,tw,th);
+      ctx.fillStyle='#fff'; ctx.textBaseline='middle'; ctx.fillText(label,6,th/2);
+      ctx.restore();
+    });
+    if(list.length){
+      const names=[...new Set(list.map(d=>wName(d.cls)))].join(', ');
+      const top=Math.round(Math.max(...list.map(d=>d.score))*100);
+      const box=document.createElement('div'), t=document.createElement('div'), sm=document.createElement('small');
+      t.textContent='WEAPON DETECTED: '+names;
+      sm.textContent=list.length+' object'+(list.length>1?'s':'')+' · top confidence '+top+'%';
+      box.append(t,sm); wBanner.textContent=''; wBanner.append(box); wBanner.classList.add('show');
+      wsay('Weapon detected: '+names,true);
+    }else{
+      wBanner.classList.remove('show'); wMsg.className='msg'; wMsg.textContent='Scanning for weapons… none detected.';
+    }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
